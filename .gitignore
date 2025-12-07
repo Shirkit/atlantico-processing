@@ -1,0 +1,6 @@
+/dataset
+/out
+/.venv
+/__pycache__
+*.pyc
+/.history
