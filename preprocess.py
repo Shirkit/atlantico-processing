@@ -20,7 +20,7 @@ SAMPLING_STRATEGY = 'downsample'
 REGEX_PATTERN = r'^(activityID|heart_rate|.*_(temp|acc16_[xyz]|gyro_[xyz]|mag_[xyz]))$'
 
 # Maximum rows per output file (None to disable)
-MAX_OUTPUT_ROWS = 16000
+MAX_OUTPUT_ROWS = 20000
 # Output sampling strategy: 'uniform' (evenly spaced) or 'proportional_random'
 OUTPUT_SAMPLING_STRATEGY = 'uniform'  # or 'proportional_random'
 # Optional random seed for reproducibility when using proportional_random
@@ -49,10 +49,6 @@ def export_binary_with_metadata(df, base_filename):
         if col == 'activityID':
             out_df[col] = out_df[col].fillna(0).astype('int8')
             type_map[col] = 'int8'
-        elif col == 'heart_rate':
-            # clip heart rate to uint8 range
-            out_df[col] = out_df[col].fillna(0).clip(0, 255).astype('uint8')
-            type_map[col] = 'uint8'
         elif col == 'timestamp':
             # already handled
             continue
@@ -354,6 +350,24 @@ def main():
     master_meta['label_values'] = label_list
     # map original label -> encoded index (store keys as strings for JSON)
     master_meta['label_map'] = { str(k): v for k, v in label_map.items() }
+    # Compute input_size: number of feature columns (exclude label and timestamp)
+    timestamp_cols = set(['timestamp'])
+    if schema_written:
+        try:
+            label_col_name = label_column_name or 'activityID'
+            input_size = 0
+            for c in schema_written:
+                name = c.get('name')
+                if name == label_col_name:
+                    continue
+                if name in timestamp_cols:
+                    continue
+                input_size += 1
+        except Exception:
+            input_size = None
+    else:
+        input_size = None
+    master_meta['input_size'] = input_size
     master_path = os.path.join(OUT_DIR, 'metadata.json')
     with open(master_path, 'w') as f:
         json.dump(master_meta, f, indent=2)

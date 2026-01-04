@@ -1,4 +1,5 @@
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import pandas as pd
 import numpy as np
 
@@ -24,9 +25,10 @@ class Interpolator(BaseEstimator, TransformerMixin):
     """
     Interpolates missing values.
     """
-    def __init__(self, method='linear', limit_direction='both'):
+    def __init__(self, method='linear', limit_direction='both', exclude_columns=None):
         self.method = method
         self.limit_direction = limit_direction
+        self.exclude_columns = exclude_columns or []
 
     def fit(self, X, y=None):
         return self
@@ -35,7 +37,18 @@ class Interpolator(BaseEstimator, TransformerMixin):
         # Ensure we are working with a DataFrame
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X)
-        return X.interpolate(method=self.method, limit_direction=self.limit_direction)
+            
+        if not self.exclude_columns:
+            return X.interpolate(method=self.method, limit_direction=self.limit_direction)
+            
+        # Interpolate only non-excluded columns
+        cols_to_interp = [c for c in X.columns if c not in self.exclude_columns]
+        if not cols_to_interp:
+            return X
+            
+        X_interp = X.copy()
+        X_interp[cols_to_interp] = X[cols_to_interp].interpolate(method=self.method, limit_direction=self.limit_direction)
+        return X_interp
 
 class WindowedAverageDownsampler(BaseEstimator, TransformerMixin):
     """
@@ -97,4 +110,52 @@ class ActivityFilter(BaseEstimator, TransformerMixin):
     def transform(self, X):
         if 'activityID' in X.columns:
             return X[~X['activityID'].isin(self.excluded_activities)]
+        return X
+
+class FeatureScaler(BaseEstimator, TransformerMixin):
+    """
+    Scales feature columns using StandardScaler, excluding specified columns (e.g. labels, timestamps).
+    """
+    def __init__(self, exclude_columns=None):
+        self.exclude_columns = exclude_columns or []
+        self.scaler = StandardScaler()
+
+    def fit(self, X, y=None):
+        # Identify columns to scale
+        if isinstance(X, pd.DataFrame):
+            cols_to_scale = [c for c in X.columns if c not in self.exclude_columns]
+            if cols_to_scale:
+                self.scaler.fit(X[cols_to_scale])
+        return self
+
+    def transform(self, X):
+        if isinstance(X, pd.DataFrame):
+            X = X.copy()
+            cols_to_scale = [c for c in X.columns if c not in self.exclude_columns]
+            if cols_to_scale:
+                X[cols_to_scale] = self.scaler.transform(X[cols_to_scale])
+        return X
+
+class FeatureScalerMinMax(BaseEstimator, TransformerMixin):
+    """
+    Scales feature columns using StandardScaler, excluding specified columns (e.g. labels, timestamps).
+    """
+    def __init__(self, exclude_columns=None):
+        self.exclude_columns = exclude_columns or []
+        self.scaler = MinMaxScaler()
+
+    def fit(self, X, y=None):
+        # Identify columns to scale
+        if isinstance(X, pd.DataFrame):
+            cols_to_scale = [c for c in X.columns if c not in self.exclude_columns]
+            if cols_to_scale:
+                self.scaler.fit(X[cols_to_scale])
+        return self
+
+    def transform(self, X):
+        if isinstance(X, pd.DataFrame):
+            X = X.copy()
+            cols_to_scale = [c for c in X.columns if c not in self.exclude_columns]
+            if cols_to_scale:
+                X[cols_to_scale] = self.scaler.transform(X[cols_to_scale])
         return X
